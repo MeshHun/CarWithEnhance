@@ -5,6 +5,7 @@ import android.util.Log;
 import java.lang.reflect.Field;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -16,13 +17,13 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final String TARGET_PACKAGE = "com.miui.carlink";
 
     @Override
-    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+    public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
 
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) {
             return;
         }
 
-        xlog(">> 成功拦截小米 CarWith, 注入续播优化逻辑...");
+        xlog(">> 成功拦截小米 CarWith, 注入优化逻辑...");
         final ClassLoader cl = lpparam.classLoader;
 
         // =========================================================================
@@ -68,11 +69,61 @@ public class MainHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             xlogE("❌ 续播 Hook 注入失败: " , t);
         }
+
+        try {
+            Class<?> carlifeControllerClass = XposedHelpers.findClass("com.xiaomi.ucar.carlife.c", cl);
+            XposedBridge.hookAllMethods(carlifeControllerClass, "j", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    android.content.Intent intent = (android.content.Intent) param.args[0];
+                    if (intent == null || !"carlife_encode_format".equals(intent.getAction())) {
+                        String act = intent != null ? intent.getAction() : "null";
+                        android.os.Bundle resBundle = (android.os.Bundle) param.getResult();
+                        xlog( ">> [画质解锁] 过滤非编码通信包, Action: " + act + ", 返回值: " + bundleToString(resBundle));
+                        return; // 仅过滤并精准拦截真实的视频流编码格式配置请求
+                    }
+                    android.os.Bundle bundle = (android.os.Bundle) param.getResult();
+
+                    if (bundle != null) {
+                        xlog(">> [画质解锁] 拦截到 CarLife 编码配置请求...");
+                        xlog(">> [画质解锁] 📦 注入前原始 Bundle: " + bundleToString(bundle));
+
+                        // 2. 注入针对高通芯片的扩展 QP 键值对 (QP_min = 10, QP_max = 28)
+                        bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 10);
+                        bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 10);
+                        bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 28);
+                        bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 28);
+
+                        // 3. 同时注入标准 MediaFormat 通用 QP 键值对 (确保全机型兼容)
+//                        bundle.putInt("video-qp-i-min", 10);
+//                        bundle.putInt("video-qp-p-min", 10);
+//                        bundle.putInt("video-qp-i-max", 28);
+//                        bundle.putInt("video-qp-p-max", 28);
+
+                        xlog(">> [画质解锁] 📦 注入后最终 Bundle: " + bundleToString(bundle));
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            xlogE ("❌ Hook 3 (CarLife QP 注入) 失败: " ,t);
+        }
     }
     // ══════════════════════════════════════════════════════════════════════════
     // 日志系统：同时输出到 Logcat 和 XposedBridge
     // ══════════════════════════════════════════════════════════════════════════
-
+    private static String bundleToString(android.os.Bundle bundle) {
+        if (bundle == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        for (String key : bundle.keySet()) {
+            sb.append(key).append("=").append(bundle.get(key)).append(", ");
+        }
+        if (sb.length() > 1) {
+            sb.setLength(sb.length() - 2);
+        }
+        sb.append("}");
+        return sb.toString();
+    }
     private static void xlog(String msg) {
         Log.i(TAG, msg);
         XposedBridge.log(TAG + ": " + msg);
