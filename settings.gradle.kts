@@ -23,6 +23,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CarWithAutoPlay"
+rootProject.name = "CarWithEnhance"
 include(":app")
  
