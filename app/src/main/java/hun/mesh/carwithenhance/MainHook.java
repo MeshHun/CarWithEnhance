@@ -22,8 +22,9 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final String PREFS_FILE = "file_prefer_app_091703";
 
     // 开关 Key 定义
-    public static final String KEY_HOOK_AUTOPLAY = "hook_autoplay_enabled";
-    public static final String KEY_HOOK_QP       = "hook_qp_enabled";
+    public static final String KEY_HOOK_AUTOPLAY      = "hook_autoplay_enabled";
+    public static final String KEY_HOOK_QP            = "hook_qp_enabled";
+    public static final String KEY_HOOK_DISCONNECT_BT = "hook_disconnect_bt_enabled";
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
@@ -173,11 +174,17 @@ public class MainHook implements IXposedHookLoadPackage {
                                 + "\"subTitle\":\"限制视频编码QP量化参数区间，改善高帧率场景下画面突变导致的画面模糊\","
                                 + "\"key\":\"" + KEY_HOOK_QP + "\","
                                 + "\"spValue\":1"
+                                + "},"
+                                + "{"
+                                + "\"type\":\"switch\","
+                                + "\"title\":\"无感触发后断开蓝牙\","
+                                + "\"subTitle\":\"无感连接触发后自动断开手机对车机的蓝牙音频(A2DP/通话)，防止音频输出设备冲突。作者自用，非必要不开启！！\","
+                                + "\"key\":\"" + KEY_HOOK_DISCONNECT_BT + "\","
+                                + "\"spValue\":1"
                                 + "}"
                                 + "]"
                                 + "}";
 
-                        // 追加到顶层数组末尾
                         int lastBracket = json.lastIndexOf(']');
                         if (lastBracket != -1) {
                             param.args[0] = json.substring(0, lastBracket) + "," + hookMenuJson + json.substring(lastBracket);
@@ -197,12 +204,12 @@ public class MainHook implements IXposedHookLoadPackage {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                             String key = (String) param.args[1];
-                            if (KEY_HOOK_AUTOPLAY.equals(key) || KEY_HOOK_QP.equals(key)) {
+                            if (KEY_HOOK_AUTOPLAY.equals(key) || KEY_HOOK_QP.equals(key) || KEY_HOOK_DISCONNECT_BT.equals(key)) {
                                 // 优先从我们自己的 SP 读，不用 i0.k 内部的 sharedPreferences 参数
                                 // 因为 i0.k 传入的 sp 是 CarWith 自己的 SP，正好和 PREFS_FILE 相同，
                                 // 可以直接用 param.args[2] 读取，这样就完全不需要 BaseApplication
                                 SharedPreferences sp = (SharedPreferences) param.args[2];
-                                boolean val = sp.getBoolean(key, true); // 默认 true = 开
+                                boolean val = sp.getBoolean(key, false); // 默认 true = 开
                                 param.setResult(val);
                                 xlog(">> [设置注入] i0.k 拦截：" + key + " = " + val);
                             }
@@ -226,7 +233,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     Object category  = param.args[1];
 
                     final String key = (String) XposedHelpers.callMethod(category, "getKey");
-                    if (!KEY_HOOK_AUTOPLAY.equals(key) && !KEY_HOOK_QP.equals(key)) return;
+                    if (!KEY_HOOK_AUTOPLAY.equals(key) && !KEY_HOOK_QP.equals(key) && !KEY_HOOK_DISCONNECT_BT.equals(key)) return;
 
                     // 从 ViewHolder 中找到 itemView（RecyclerView.ViewHolder 的 public final View itemView 字段）
                     final android.view.View itemView = (android.view.View) XposedHelpers.getObjectField(viewHolder, "itemView");
@@ -358,10 +365,37 @@ public class MainHook implements IXposedHookLoadPackage {
                             );
                             XposedHelpers.callMethod(qpPref, "setOnPreferenceChangeListener", listenerQP);
 
+                            // 创建 连接后断开蓝牙音频 开关
+                            Object btPref = XposedHelpers.newInstance(switchPrefClass, ctx);
+                            XposedHelpers.callMethod(btPref, "setKey", KEY_HOOK_DISCONNECT_BT);
+                            XposedHelpers.callMethod(btPref, "setTitle", "无感触发后断开蓝牙");
+                            XposedHelpers.callMethod(btPref, "setSummary", "无感连接触发后自动断开手机对车机的蓝牙音频(A2DP/通话)，防止音频输出设备冲突。作者自用，非必要不开启！！");
+                            XposedHelpers.callMethod(btPref, "setDefaultValue", false); // 默认关闭
+                            XposedHelpers.callMethod(btPref, "setChecked", prefs.getBoolean(KEY_HOOK_DISCONNECT_BT, false));
+
+                            Object listenerBT = java.lang.reflect.Proxy.newProxyInstance(
+                                    cl,
+                                    new Class<?>[]{ changeListenerClass },
+                                    new java.lang.reflect.InvocationHandler() {
+                                        @Override
+                                        public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] args) throws Throwable {
+                                            if ("onPreferenceChange".equals(method.getName())) {
+                                                boolean val = (Boolean) args[1];
+                                                prefs.edit().putBoolean(KEY_HOOK_DISCONNECT_BT, val).apply();
+                                                xlog(">> [手机端设置] 开关已更新: " + KEY_HOOK_DISCONNECT_BT + " = " + val);
+                                                return true;
+                                            }
+                                            return null;
+                                        }
+                                    }
+                            );
+                            XposedHelpers.callMethod(btPref, "setOnPreferenceChangeListener", listenerBT);
+
                             // 将 Preference 组装并添加到 PreferenceScreen
                             XposedHelpers.callMethod(preferenceScreen, "addPreference", category);
                             XposedHelpers.callMethod(category, "addPreference", autoPlayPref);
                             XposedHelpers.callMethod(category, "addPreference", qpPref);
+                            XposedHelpers.callMethod(category, "addPreference", btPref);
 
                             xlog(">> [手机端设置] 成功注入画质优化开关分组");
                         }
@@ -383,6 +417,7 @@ public class MainHook implements IXposedHookLoadPackage {
                             // 通过 key 找到对应的 Preference 并刷新选中状态
                             refreshSwitchPref(preferenceScreen, KEY_HOOK_AUTOPLAY, prefs.getBoolean(KEY_HOOK_AUTOPLAY, true));
                             refreshSwitchPref(preferenceScreen, KEY_HOOK_QP, prefs.getBoolean(KEY_HOOK_QP, true));
+                            refreshSwitchPref(preferenceScreen, KEY_HOOK_DISCONNECT_BT, prefs.getBoolean(KEY_HOOK_DISCONNECT_BT, false));
                             xlog(">> [手机端设置] onResume 刷新开关状态完成");
                         }
                     });
@@ -390,11 +425,101 @@ public class MainHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             xlogE("❌ Hook 4 (手机端设置界面注入) 失败: ", t);
         }
+
+        // =========================================================================
+        // Hook 5: 连接车机热点后自动断开蓝牙音频 (A2DP / HFP / 通话)
+        // 解决部分车机无线投屏与蓝牙通话/音乐声道冲突的问题
+        // =========================================================================
+        try {
+            Class<?> autoConnectManagerClass = XposedHelpers.findClass("k9.b", cl);
+            XposedBridge.hookAllMethods(autoConnectManagerClass, "B", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    // 读取开关状态
+                    Context appCtx = getAppContext(cl);
+                    if (appCtx != null && !appCtx.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+                            .getBoolean(KEY_HOOK_DISCONNECT_BT, false)) {
+                        xlog(">> [自动断开蓝牙] 功能已关闭，跳过执行");
+                        return;
+                    }
+
+                    xlog("====== 拦截到连接 CarAP 热点请求，执行断开蓝牙音频控制 ======");
+                    Object clInfo = param.args[1];
+                    Object ecInfo = param.args[2];
+                    String carMac = null;
+                    if (clInfo != null) {
+                        carMac = (String) XposedHelpers.callMethod(clInfo, "getCarBtMacAddress");
+                    } else if (ecInfo != null) {
+                        carMac = (String) XposedHelpers.callMethod(ecInfo, "getCarBtMacAddress");
+                    }
+
+                    final Context context = (Context) XposedHelpers.getObjectField(param.thisObject, "b");
+                    if (context != null && carMac != null) {
+                        final String finalCarMac = carMac;
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                disconnectBluetoothDevice(context, finalCarMac);
+                            }
+                        }, 1500);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            xlogE("❌ Hook 5 (无线连接后断开蓝牙音频) 失败: ", t);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 工具方法
+    // 工具方法 & 辅助方法
     // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 自动断开指定蓝牙设备的音频和通话Profile
+     */
+    private static void disconnectBluetoothDevice(final Context context, String mac) {
+        final android.bluetooth.BluetoothAdapter adapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) return;
+
+        final android.bluetooth.BluetoothDevice targetDevice;
+        try {
+            targetDevice = adapter.getRemoteDevice(mac);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+
+        // 断开通话音频 (HFP / HEADSET)
+        adapter.getProfileProxy(context, new android.bluetooth.BluetoothProfile.ServiceListener() {
+            @Override
+            public void onServiceConnected(int profile, android.bluetooth.BluetoothProfile proxy) {
+                try {
+                    java.lang.reflect.Method disconnectMethod = proxy.getClass().getMethod("disconnect", android.bluetooth.BluetoothDevice.class);
+                    disconnectMethod.setAccessible(true);
+                    disconnectMethod.invoke(proxy, targetDevice);
+                    adapter.closeProfileProxy(profile, proxy);
+                } catch (Exception ignored) {}
+            }
+
+            @Override
+            public void onServiceDisconnected(int profile) {}
+        }, android.bluetooth.BluetoothProfile.HEADSET);
+
+        // 断开媒体音频 (A2DP)
+        adapter.getProfileProxy(context, new android.bluetooth.BluetoothProfile.ServiceListener() {
+            @Override
+            public void onServiceConnected(int profile, android.bluetooth.BluetoothProfile proxy) {
+                try {
+                    java.lang.reflect.Method disconnectMethod = proxy.getClass().getMethod("disconnect", android.bluetooth.BluetoothDevice.class);
+                    disconnectMethod.setAccessible(true);
+                    disconnectMethod.invoke(proxy, targetDevice);
+                    adapter.closeProfileProxy(profile, proxy);
+                } catch (Exception ignored) {}
+            }
+
+            @Override
+            public void onServiceDisconnected(int profile) {}
+        }, android.bluetooth.BluetoothProfile.A2DP);
+    }
 
     /**
      * 获取 CarWith 应用的全局 Context。
