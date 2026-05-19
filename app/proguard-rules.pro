@@ -12,8 +12,8 @@
 #   public *;
 #}
 -keepnames class de.robv.android.xposed.** { *; }
--keep class hun.mesh.carwithautoplay.MainHook { *; }
--keep class hun.mesh.carwithautoplay.** { *; }
+-keep class hun.mesh.carwithenhance.MainHook { *; }
+-keep class hun.mesh.carwithenhance.** { *; }
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable

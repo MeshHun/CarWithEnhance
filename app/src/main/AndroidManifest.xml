@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="hun.mesh.carwithautoplay">
+    package="hun.mesh.carwithenhance">
 
     <application
-        android:label="CarWithAutoPlay">
+        android:label="CarWith Enhance">
 
         <!-- LSPosed 模块声明 -->
         <meta-data
@@ -10,7 +10,7 @@
             android:value="true"/>
         <meta-data
             android:name="xposeddescription"
-            android:value="QQ音乐上车续播的垃圾逻辑修改"/>
+            android:value="CarWith增强模块 by Mesh_Hun"/>
         <meta-data
             android:name="xposedminversion"
             android:value="93"/>

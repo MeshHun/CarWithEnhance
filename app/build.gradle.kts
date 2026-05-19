@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "hun.mesh.carwithautoplay"
+    namespace = "hun.mesh.carwithenhance"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,7 +11,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "hun.mesh.carwithautoplay"
+        applicationId = "hun.mesh.carwithenhance"
         minSdk = 29
         targetSdk = 36
         versionCode = 3

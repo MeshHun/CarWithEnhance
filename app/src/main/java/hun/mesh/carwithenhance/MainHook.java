@@ -1,4 +1,4 @@
-package hun.mesh.carwithautoplay;
+package hun.mesh.carwithenhance;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -15,7 +15,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public class MainHook implements IXposedHookLoadPackage {
 
-    private static final String TAG = "carwithautoplay";
+    private static final String TAG = "carwithenhance";
     private static final String TARGET_PACKAGE = "com.miui.carlink";
 
     // SharedPreferences 文件名（复用 CarWith 自身已有的配置文件）
@@ -157,18 +157,20 @@ public class MainHook implements IXposedHookLoadPackage {
                         // 真正的显示状态由 i0.k() 决定，所以 spValue 随便写 1 即可)
                         String hookMenuJson = "{"
                                 + "\"type\":\"router\","
-                                + "\"title\":\"优化hook\","
+                                + "\"title\":\"CarWith Enhance\","
                                 + "\"router\":\"mesh_hook_optimization_menu\","
                                 + "\"value\":["
                                 + "{"
                                 + "\"type\":\"switch\","
                                 + "\"title\":\"QQ音乐完美续播\","
+                                + "\"subTitle\":\"开启后阻止上车续播播放歌单《巅峰潮流榜》\","
                                 + "\"key\":\"" + KEY_HOOK_AUTOPLAY + "\","
                                 + "\"spValue\":1"
                                 + "},"
                                 + "{"
                                 + "\"type\":\"switch\","
                                 + "\"title\":\"高画质 QP 注入\","
+                                + "\"subTitle\":\"限制视频编码QP量化参数区间，改善高帧率场景下画面突变导致的画面模糊\","
                                 + "\"key\":\"" + KEY_HOOK_QP + "\","
                                 + "\"spValue\":1"
                                 + "}"
@@ -297,7 +299,7 @@ public class MainHook implements IXposedHookLoadPackage {
                             // 创建 PreferenceCategory
                             Class<?> categoryClass = XposedHelpers.findClass("androidx.preference.PreferenceCategory", cl);
                             Object category = XposedHelpers.newInstance(categoryClass, ctx);
-                            XposedHelpers.callMethod(category, "setTitle", "画质与播放优化 (Mesh Hook)");
+                            XposedHelpers.callMethod(category, "setTitle", "CarWith Enhance");
 
                             // 创建 QQ音乐完美续播 开关
                             Class<?> switchPrefClass = XposedHelpers.findClass("androidx.preference.SwitchPreference", cl);
