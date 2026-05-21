@@ -4,6 +4,7 @@ import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import hun.mesh.carwithenhance.hook.AutoPlayHook;
 import hun.mesh.carwithenhance.hook.BluetoothHook;
+import hun.mesh.carwithenhance.hook.BlurCapabilityHook;
 import hun.mesh.carwithenhance.hook.IHook;
 import hun.mesh.carwithenhance.hook.QPHook;
 import hun.mesh.carwithenhance.hook.SettingsHook;
@@ -20,10 +21,7 @@ public class MainHook implements IXposedHookLoadPackage {
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) {
             return;
         }
-
-        XLog.i("========================================================");
         XLog.i(">> [CarWith Enhance] 成功拦截小米 CarWith, 开始挂载各优化模块...");
-        XLog.i("========================================================");
         
         final ClassLoader cl = lpparam.classLoader;
 
@@ -32,7 +30,8 @@ public class MainHook implements IXposedHookLoadPackage {
                 new AutoPlayHook(),
                 new QPHook(),
                 new SettingsHook(),
-                new BluetoothHook()
+                new BluetoothHook(),
+                new BlurCapabilityHook()
         };
 
         // 统一循环调度与捕获
@@ -45,9 +44,6 @@ public class MainHook implements IXposedHookLoadPackage {
                 XLog.e(">> [路由器] 挂载 " + hookName + " 异常失败: ", t);
             }
         }
-        
-        XLog.i("========================================================");
         XLog.i(">> [CarWith Enhance] 所有优化子模块全部挂载处理完成！");
-        XLog.i("========================================================");
     }
 }

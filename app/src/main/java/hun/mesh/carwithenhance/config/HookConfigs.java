@@ -35,12 +35,21 @@ public class HookConfigs {
             false
     );
 
+    // 4. Android 13 强开高级材质
+    public static final HookItem ADVANCED_BLUR = new HookItem(
+            "hook_advanced_blur_enabled",
+            "Android13跳过高级材质验证",
+            "在安卓13不支持的设备上允许使用毛玻璃和高级材质",
+            true
+    );
+
     private static final List<HookItem> ALL_ITEMS = new ArrayList<>();
 
     static {
         ALL_ITEMS.add(AUTOPLAY);
         ALL_ITEMS.add(QP);
         ALL_ITEMS.add(DISCONNECT_BT);
+        ALL_ITEMS.add(ADVANCED_BLUR);
     }
 
     /**
