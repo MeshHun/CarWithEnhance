@@ -29,7 +29,13 @@ public class BlurCapabilityHook implements IHook {
 
         try {
             // 获取目标类 em.d (HyperMaterialUtils)
-            final Class<?> hyperMaterialUtilsClass = XposedHelpers.findClass("em.d", cl);
+            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBlurClass();
+            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBlurMethod();
+            if (className == null || className.isEmpty()) {
+                XLog.e("BlurCapabilityHook 动态目标未找到，跳过 Hook");
+                return;
+            }
+            final Class<?> hyperMaterialUtilsClass = XposedHelpers.findClass(className, cl);
 
             if (sdk == 33) {
                 // ============================================
@@ -51,7 +57,7 @@ public class BlurCapabilityHook implements IHook {
             //    直接 Hook d.f(Context) 方法，阻断其读取 Settings.Secure 中的 background_blur_enable (0)，
             //    使用 XC_MethodReplacement 强行使其永远返回 true！
             //    以此彻底解决在手机上不想使用高级材质时，车机内照样强制呈现毛玻璃的要求。
-            XposedHelpers.findAndHookMethod(hyperMaterialUtilsClass, "f",
+            XposedHelpers.findAndHookMethod(hyperMaterialUtilsClass, methodName,
                     android.content.Context.class,
                     new de.robv.android.xposed.XC_MethodReplacement() {
                         @Override

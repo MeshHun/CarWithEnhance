@@ -36,6 +36,7 @@ android {
 
 dependencies {
     compileOnly("de.robv.android.xposed:api:82")
+    implementation("org.luckypray:dexkit:2.2.0")
 //    implementation(libs.appcompat)
 //    implementation(libs.material)
 //    testImplementation(libs.junit)

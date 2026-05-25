@@ -17,7 +17,14 @@ public class QPHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            XposedHelpers.findAndHookMethod("com.xiaomi.ucar.carlife.c", cl, "i",
+            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getQpClass();
+            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getQpMethod();
+            if (className == null || className.isEmpty()) {
+                XLog.e("QPHook 动态目标未找到，跳过 Hook");
+                return;
+            }
+            
+            XposedHelpers.findAndHookMethod(className, cl, methodName,
                     boolean.class, Intent.class, Bundle.class,
                     new XC_MethodHook() {
                         @Override

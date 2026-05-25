@@ -19,8 +19,14 @@ public class BluetoothHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            Class<?> autoConnectManagerClass = XposedHelpers.findClass("k9.b", cl);
-            XposedBridge.hookAllMethods(autoConnectManagerClass, "B", new XC_MethodHook() {
+            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBluetoothClass();
+            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBluetoothMethod();
+            if (className == null || className.isEmpty()) {
+                XLog.e("BluetoothHook 动态目标未找到，跳过 Hook");
+                return;
+            }
+            Class<?> autoConnectManagerClass = XposedHelpers.findClass(className, cl);
+            XposedBridge.hookAllMethods(autoConnectManagerClass, methodName, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                     // 读取开关状态
@@ -41,13 +47,26 @@ public class BluetoothHook implements IHook {
                         carMac = (String) XposedHelpers.callMethod(ecInfo, "getCarBtMacAddress");
                     }
 
-                    final Context context = (Context) XposedHelpers.getObjectField(param.thisObject, "b");
-                    if (context != null && carMac != null) {
+                    Context context = null;
+                    for (java.lang.reflect.Field f : param.thisObject.getClass().getDeclaredFields()) {
+                        if (Context.class.isAssignableFrom(f.getType())) {
+                            f.setAccessible(true);
+                            context = (Context) f.get(param.thisObject);
+                            break;
+                        }
+                    }
+                    if (context == null) {
+                        XLog.e(">> BluetoothHook: 无法在目标对象中找到 Context 字段，无法执行断开蓝牙操作！");
+                        return;
+                    }
+
+                    final Context finalContext = context;
+                    if (carMac != null) {
                         final String finalCarMac = carMac;
                         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                             @Override
                             public void run() {
-                                BluetoothUtils.disconnectBluetoothDevice(context, finalCarMac);
+                                BluetoothUtils.disconnectBluetoothDevice(finalContext, finalCarMac);
                             }
                         }, 1500);
                     }

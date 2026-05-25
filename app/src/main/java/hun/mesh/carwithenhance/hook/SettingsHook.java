@@ -73,8 +73,14 @@ public class SettingsHook implements IHook {
         // 2. 车机端状态读取：拦截 i0.k() 以准确返回自定义配置
         // =========================================================================
         try {
-            Class<?> i0Class = XposedHelpers.findClass("m6.i0", cl);
-            XposedHelpers.findAndHookMethod(i0Class, "k",
+            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getSettingsClass();
+            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getSettingsMethod();
+            if (className == null || className.isEmpty()) {
+                XLog.e("SettingsHook 动态目标未找到，跳过 Hook");
+                return;
+            }
+            Class<?> i0Class = XposedHelpers.findClass(className, cl);
+            XposedHelpers.findAndHookMethod(i0Class, methodName,
                     Context.class, String.class, SharedPreferences.class,
                     new XC_MethodHook() {
                         @Override

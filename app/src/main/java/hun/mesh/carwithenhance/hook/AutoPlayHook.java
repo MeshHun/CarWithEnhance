@@ -17,7 +17,14 @@ public class AutoPlayHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            XposedHelpers.findAndHookMethod("ja.a$b", cl, "a",
+            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getAutoPlayClass();
+            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getAutoPlayMethod();
+            if (className == null || className.isEmpty()) {
+                XLog.e("AutoPlayHook 动态目标未找到，跳过 Hook");
+                return;
+            }
+            
+            XposedHelpers.findAndHookMethod(className, cl, methodName,
                     boolean.class, int.class, java.util.List.class, int.class, String.class, android.os.Bundle.class,
                     new XC_MethodReplacement() {
                         @Override
