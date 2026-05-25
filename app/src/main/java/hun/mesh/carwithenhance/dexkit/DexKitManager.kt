@@ -8,7 +8,7 @@ import org.luckypray.dexkit.DexKitBridge
 
 object DexKitManager {
 
-    private const val PREFS_DEXKIT = "dexkit_cache"
+    private const val PREFS_DEXKIT = "carwithenhance_dexkit_cache"
     private const val KEY_LAST_VERSION = "last_version_code"
 
     // 缓存的方法目标

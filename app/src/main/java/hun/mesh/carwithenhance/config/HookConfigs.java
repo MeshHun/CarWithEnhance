@@ -9,7 +9,7 @@ import java.util.List;
 public class HookConfigs {
     
     // SharedPreferences 文件名（复用 CarWith 自身已有的配置文件）
-    public static final String PREFS_FILE = "file_prefer_app_091703";
+    public static final String PREFS_FILE = "carwithenhance_hooksettings";
 
     // 1. QQ 音乐完美续播
     public static final HookItem AUTOPLAY = new HookItem(
