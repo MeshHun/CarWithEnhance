@@ -8,6 +8,7 @@ import hun.mesh.carwithenhance.hook.BlurCapabilityHook;
 import hun.mesh.carwithenhance.hook.IHook;
 import hun.mesh.carwithenhance.hook.QPHook;
 import hun.mesh.carwithenhance.hook.SettingsHook;
+import hun.mesh.carwithenhance.hook.ScreenOnHook;
 import hun.mesh.carwithenhance.utils.XLog;
 
 /**
@@ -31,7 +32,8 @@ public class MainHook implements IXposedHookLoadPackage {
                 new QPHook(),
                 new SettingsHook(),
                 new BluetoothHook(),
-                new BlurCapabilityHook()
+                new BlurCapabilityHook(),
+                new ScreenOnHook()
         };
 
         // 统一循环调度与捕获

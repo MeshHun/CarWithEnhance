@@ -43,6 +43,14 @@ public class HookConfigs {
             true
     );
 
+    // 5. 禁用20分钟自动亮屏
+    public static final HookItem SCREEN_ON_DISABLE = new HookItem(
+            "hook_screen_on_disable_enabled",
+            "禁用20分钟自动亮屏",
+            "禁用系统侧Carlife由于没有保活而每20分钟强制亮屏续命的逻辑(仅供休眠测试)",
+            false
+    );
+
     private static final List<HookItem> ALL_ITEMS = new ArrayList<>();
 
     static {
@@ -50,6 +58,7 @@ public class HookConfigs {
         ALL_ITEMS.add(QP);
         ALL_ITEMS.add(DISCONNECT_BT);
         ALL_ITEMS.add(ADVANCED_BLUR);
+        ALL_ITEMS.add(SCREEN_ON_DISABLE);
     }
 
     /**
