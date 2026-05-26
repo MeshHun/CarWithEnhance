@@ -11,6 +11,7 @@ import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.config.HookItem;
 import hun.mesh.carwithenhance.utils.XLog;
+import hun.mesh.carwithenhance.dexkit.DexKitManager;
 
 /**
  * Hook 3 & Hook 4: 车机端与手机端设置面板注入、状态同步和点击接管
@@ -60,7 +61,7 @@ public class SettingsHook implements IHook {
                         int lastBracket = json.lastIndexOf(']');
                         if (lastBracket != -1) {
                             param.args[0] = json.substring(0, lastBracket) + "," + hookMenuJson + json.substring(lastBracket);
-                            XLog.i(">> [车机端设置] 成功动态注入【CarWith Enhance】二级菜单！");
+                            XLog.i(">> [车机端UI] 成功动态注入[CarWith Enhance]二级菜单！");
                         }
                     }
                 }
@@ -70,17 +71,17 @@ public class SettingsHook implements IHook {
         }
 
         // =========================================================================
-        // 2. 车机端状态读取：拦截 i0.k() 以准确返回自定义配置
+        // 2. 车机端状态读取：拦截以准确返回自定义配置
         // =========================================================================
         try {
-            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getSettingsClass();
-            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getSettingsMethod();
+            String className = DexKitManager.INSTANCE.getSettingsClass();
+            String methodName = DexKitManager.INSTANCE.getSettingsMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("SettingsHook 动态目标未找到，跳过 Hook");
                 return;
             }
-            Class<?> i0Class = XposedHelpers.findClass(className, cl);
-            XposedHelpers.findAndHookMethod(i0Class, methodName,
+            Class<?> settingsStateClass = XposedHelpers.findClass(className, cl);
+            XposedHelpers.findAndHookMethod(settingsStateClass, methodName,
                     Context.class, String.class, SharedPreferences.class,
                     new XC_MethodHook() {
                         @Override
@@ -91,21 +92,25 @@ public class SettingsHook implements IHook {
                                 SharedPreferences sp = (SharedPreferences) param.args[2];
                                 boolean val = sp.getBoolean(key, matchedItem.defaultValue);
                                 param.setResult(val);
-                                XLog.i(">> [车机端设置] i0.k() 拦截读取状态：" + key + " = " + val);
+                                XLog.i(">> [车机端UI] 拦截读取状态：" + key + " = " + val);
                             }
                         }
                     });
         } catch (Throwable t) {
-            XLog.e("❌ Hook 3-2 (车机端 i0.k 状态同步) 失败: ", t);
+            XLog.e("❌ Hook 3-2 (车机端UI状态同步) 失败: ", t);
         }
 
         // =========================================================================
-        // 3. 车机端点击交互：Hook SettingsIndexAdapter.x0() 彻底接管开关点击
+        // 3. 车机端点击交互：Hook SettingsIndexAdapter接管开关点击
         // =========================================================================
         try {
-            Class<?> adapterClass = XposedHelpers.findClass(
-                    "com.carwith.launcher.settings.car.adapter.SettingsIndexAdapter", cl);
-            XposedBridge.hookAllMethods(adapterClass, "x0", new XC_MethodHook() {
+            String adapterClassName = DexKitManager.INSTANCE.getSettingsAdapterClass();
+            String adapterMethodName = DexKitManager.INSTANCE.getSettingsAdapterMethod();
+            if (adapterClassName == null || adapterClassName.isEmpty() || adapterMethodName == null || adapterMethodName.isEmpty()) {
+                XLog.e("SettingsHook 动态目标 adapter 未找到，跳过 Hook 3-3");
+            } else {
+                Class<?> adapterClass = XposedHelpers.findClass(adapterClassName, cl);
+                XposedBridge.hookAllMethods(adapterClass, adapterMethodName, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     if (param.args == null || param.args.length < 2) return;
@@ -142,25 +147,29 @@ public class SettingsHook implements IHook {
                             SharedPreferences sp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
                             sp.edit().putBoolean(key, newVal).apply();
 
-                            XLog.i(">> [车机端设置] 开关 " + key + " 点击翻转，写入 SP: " + newVal);
+                            XLog.i(">> [车机端UI] 开关 " + key + " 点击翻转，写入 SP: " + newVal);
                         }
                     });
 
-                    XLog.i(">> [车机端设置] x0 绑定完成，已成功接管 itemView 点击: key=" + key);
+                    XLog.i(">> [车机端UI] 绑定完成，已成功接管 itemView 点击: key=" + key);
                 }
             });
+            }
         } catch (Throwable t) {
-            XLog.e("❌ Hook 3-3 (车机端 x0 点击接管) 失败: ", t);
+            XLog.e("❌ Hook 3-3 (车机端UI点击接管) 失败: ", t);
         }
 
         // =========================================================================
         // 4. 手机端设置界面注入：动态创建 SwitchPreference 形成双端互控
         // =========================================================================
         try {
-            Class<?> ucarScreenSettingsFragmentClass = XposedHelpers.findClass(
-                    "com.carwith.launcher.settings.phone.UCarScreenSettingsActivity$UCarScreenSettingsFragment", cl);
+            String fragmentClassName = DexKitManager.INSTANCE.getUcarSettingsFragmentClass();
+            if (fragmentClassName == null || fragmentClassName.isEmpty()) {
+                XLog.e("SettingsHook 动态目标 UCarScreenSettingsFragment 未找到，跳过 Hook 4");
+            } else {
+                Class<?> ucarScreenSettingsFragmentClass = XposedHelpers.findClass(fragmentClassName, cl);
 
-            XposedHelpers.findAndHookMethod(ucarScreenSettingsFragmentClass, "onCreatePreferences",
+                XposedHelpers.findAndHookMethod(ucarScreenSettingsFragmentClass, "onCreatePreferences",
                     Bundle.class, String.class, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -200,7 +209,7 @@ public class SettingsHook implements IHook {
                                                 if ("onPreferenceChange".equals(method.getName())) {
                                                     boolean val = (Boolean) args[1];
                                                     prefs.edit().putBoolean(item.key, val).apply();
-                                                    XLog.i(">> [手机端设置] 开关已更新: " + item.key + " = " + val);
+                                                    XLog.i(">> [手机端UI] 开关已更新: " + item.key + " = " + val);
                                                     return true;
                                                 }
                                                 return null;
@@ -210,7 +219,7 @@ public class SettingsHook implements IHook {
                                 XposedHelpers.callMethod(pref, "setOnPreferenceChangeListener", listener);
                                 XposedHelpers.callMethod(category, "addPreference", pref);
                             }
-                            XLog.i(">> [手机端设置] 成功全动态注入【CarWith Enhance】优化面板组");
+                            XLog.i(">> [手机端UI] 成功全动态注入[CarWith Enhance]优化设置UI");
                         }
                     });
 
@@ -230,12 +239,12 @@ public class SettingsHook implements IHook {
                             for (HookItem item : HookConfigs.getAllItems()) {
                                 refreshSwitchPref(preferenceScreen, item.key, prefs.getBoolean(item.key, item.defaultValue));
                             }
-                            XLog.i(">> [手机端设置] onResume 动态刷新所有开关状态完成");
+                            XLog.i(">> [手机端UI] onResume 动态刷新所有开关状态完成");
                         }
                     });
-
+            }
         } catch (Throwable t) {
-            XLog.e("❌ Hook 4 (手机端设置界面动态注入与同步) 失败: ", t);
+            XLog.e("❌ Hook 4 (手机端UI界面动态注入与同步) 失败: ", t);
         }
     }
 

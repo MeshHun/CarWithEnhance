@@ -6,6 +6,7 @@ import android.os.Bundle;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
+import hun.mesh.carwithenhance.dexkit.DexKitManager;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.XLog;
 
@@ -17,8 +18,8 @@ public class QPHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getQpClass();
-            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getQpMethod();
+            String className = DexKitManager.INSTANCE.getQpClass();
+            String methodName = DexKitManager.INSTANCE.getQpMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("QPHook 动态目标未找到，跳过 Hook");
                 return;

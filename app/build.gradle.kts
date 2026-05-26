@@ -16,6 +16,7 @@ android {
         targetSdk = 36
         versionCode = 4
         versionName = "1.3"
+        buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
     }
 
     buildTypes {
@@ -31,6 +32,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+    
+    buildFeatures {
+        buildConfig = true
     }
 }
 

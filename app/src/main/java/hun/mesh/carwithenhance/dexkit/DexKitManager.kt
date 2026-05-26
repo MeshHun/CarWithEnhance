@@ -24,6 +24,14 @@ object DexKitManager {
     var settingsClass: String = ""
     var settingsMethod: String = ""
 
+    var settingsAdapterClass: String = ""
+    var settingsAdapterMethod: String = ""
+
+    var ucarSettingsFragmentClass: String = ""
+
+    var carlinkStateMachineClass: String = ""
+    var screenOnMethod: String = ""
+
     var bluetoothClass: String = ""
     var bluetoothMethod: String = ""
 
@@ -32,27 +40,28 @@ object DexKitManager {
 
         try {
             val packageInfo = ctx.packageManager.getPackageInfo(lpparam.packageName, 0)
-            val currentVersionCode = packageInfo.longVersionCode
+            val currentAppVersionCode = packageInfo.longVersionCode
+            // 获取模块每次编译时产生的唯一时间戳
+            val currentModuleBuildTime = hun.mesh.carwithenhance.BuildConfig.BUILD_TIME
 
             val prefs = ctx.getSharedPreferences(PREFS_DEXKIT, Context.MODE_PRIVATE)
-            val lastVersionCode = prefs.getLong(KEY_LAST_VERSION, -1)
+            val lastAppVersionCode = prefs.getLong(KEY_LAST_VERSION, -1)
+            val lastModuleBuildTime = prefs.getLong("KEY_LAST_MODULE_BUILD_TIME", -1L)
 
-            if (currentVersionCode == lastVersionCode) {
+            if (currentAppVersionCode == lastAppVersionCode && currentModuleBuildTime == lastModuleBuildTime) {
                 // 缓存命中，直接读取
-                XLog.i("DexKitManager: App版本未变 ($currentVersionCode)，直接使用缓存。")
+                XLog.i("DexKitManager: 宿主版本未变，且模块未重新编译，直接使用缓存。")
                 loadFromCache(prefs)
                 return
             }
 
-            XLog.i("DexKitManager: App版本变化或首次启动 ($lastVersionCode -> $currentVersionCode)，开始全量搜索。")
+            XLog.i("DexKitManager: 宿主升级或模块重新编译，开始全量搜索。")
             System.loadLibrary("dexkit")
-            
-            DexKitBridge.create(lpparam.appInfo.sourceDir)?.use { bridge ->
+
+            DexKitBridge.create(lpparam.appInfo.sourceDir).use { bridge ->
                 resolveTargets(bridge)
-                saveToCache(prefs, currentVersionCode)
+                saveToCache(prefs, currentAppVersionCode)
                 XLog.i("DexKitManager: 全量搜索完成并已更新缓存。")
-            } ?: run {
-                XLog.e("DexKitManager: DexKitBridge 创建失败！")
             }
 
         } catch (e: Throwable) {
@@ -116,7 +125,51 @@ object DexKitManager {
             XLog.i("DexKit: 找到 SettingsHook 目标 -> $settingsClass.$settingsMethod")
         }
 
-        // 5. BluetoothHook 目标 (k9.b.B(String, CarlifeConnectInfo, EasyConnectInfo))
+        // 5. SettingsIndexAdapter 目标
+        val settingsAdapterResults = bridge.findClass {
+            matcher {
+                usingStrings("prefer_dock_style")
+            }
+        }
+        // 优先选择名字不包含 $ 的，或者是主类
+        settingsAdapterClass = settingsAdapterResults.find { !it.name.substringAfterLast(".").contains("$") }?.name
+            ?: settingsAdapterResults.firstOrNull()?.name
+                    ?: "com.carwith.launcher.settings.car.adapter.SettingsIndexAdapter"
+        settingsAdapterMethod = "x0"
+        XLog.i("DexKit: 找到 SettingsAdapter 目标 -> $settingsAdapterClass.$settingsAdapterMethod")
+
+        // 6. UCarScreenSettingsFragment 目标
+        val ucarFragmentResults = bridge.findMethod {
+            matcher {
+                name = "onCreatePreferences"
+                paramTypes("android.os.Bundle", "java.lang.String")
+            }
+        }
+        // 找到属于 UCarScreenSettingsFragment 的那个方法所属的类
+        val targetFragmentClass =
+            ucarFragmentResults.find { it.className.contains("UCarScreenSettingsFragment") }?.className
+        ucarSettingsFragmentClass = targetFragmentClass
+            ?: "com.carwith.launcher.settings.phone.UCarScreenSettingsActivity\$UCarScreenSettingsFragment"
+        XLog.i("DexKit: 找到 UCarScreenSettingsFragment 目标 -> $ucarSettingsFragmentClass")
+
+        // 7. ScreenOnHook 目标
+        val screenOnResults = bridge.findMethod {
+            matcher {
+                usingStrings("start ScreenOnTask")
+                returnType = "void"
+            }
+        }
+        screenOnResults.firstOrNull()?.let {
+            carlinkStateMachineClass = it.className
+            screenOnMethod = it.name
+            XLog.i("DexKit: 找到 ScreenOnHook 目标 -> $carlinkStateMachineClass.$screenOnMethod")
+        } ?: run {
+            carlinkStateMachineClass = "com.miui.carlink.castfwk.CarlinkStateMachine"
+            screenOnMethod = "u1"
+            XLog.i("DexKit: 未精确找到 ScreenOnHook，使用默认目标 -> $carlinkStateMachineClass.$screenOnMethod")
+        }
+
+        // 8. BluetoothHook 目标 (k9.b.B(String, CarlifeConnectInfo, EasyConnectInfo))
         val bluetoothResults = bridge.findMethod {
             matcher {
                 returnType = "void"
@@ -133,9 +186,10 @@ object DexKitManager {
         }
     }
 
-    private fun saveToCache(prefs: android.content.SharedPreferences, versionCode: Long) {
+    private fun saveToCache(prefs: android.content.SharedPreferences, appVersionCode: Long) {
         prefs.edit().apply {
-            putLong(KEY_LAST_VERSION, versionCode)
+            putLong(KEY_LAST_VERSION, appVersionCode)
+            putLong("KEY_LAST_MODULE_BUILD_TIME", hun.mesh.carwithenhance.BuildConfig.BUILD_TIME)
             putString("autoPlayClass", autoPlayClass)
             putString("autoPlayMethod", autoPlayMethod)
             putString("qpClass", qpClass)
@@ -144,6 +198,11 @@ object DexKitManager {
             putString("blurMethod", blurMethod)
             putString("settingsClass", settingsClass)
             putString("settingsMethod", settingsMethod)
+            putString("settingsAdapterClass", settingsAdapterClass)
+            putString("settingsAdapterMethod", settingsAdapterMethod)
+            putString("ucarSettingsFragmentClass", ucarSettingsFragmentClass)
+            putString("carlinkStateMachineClass", carlinkStateMachineClass)
+            putString("screenOnMethod", screenOnMethod)
             putString("bluetoothClass", bluetoothClass)
             putString("bluetoothMethod", bluetoothMethod)
         }.apply()
@@ -158,6 +217,11 @@ object DexKitManager {
         blurMethod = prefs.getString("blurMethod", "") ?: ""
         settingsClass = prefs.getString("settingsClass", "") ?: ""
         settingsMethod = prefs.getString("settingsMethod", "") ?: ""
+        settingsAdapterClass = prefs.getString("settingsAdapterClass", "") ?: ""
+        settingsAdapterMethod = prefs.getString("settingsAdapterMethod", "") ?: ""
+        ucarSettingsFragmentClass = prefs.getString("ucarSettingsFragmentClass", "") ?: ""
+        carlinkStateMachineClass = prefs.getString("carlinkStateMachineClass", "") ?: ""
+        screenOnMethod = prefs.getString("screenOnMethod", "") ?: ""
         bluetoothClass = prefs.getString("bluetoothClass", "") ?: ""
         bluetoothMethod = prefs.getString("bluetoothMethod", "") ?: ""
     }

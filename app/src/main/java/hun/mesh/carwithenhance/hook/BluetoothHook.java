@@ -10,6 +10,7 @@ import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.BluetoothUtils;
 import hun.mesh.carwithenhance.utils.XLog;
+import hun.mesh.carwithenhance.dexkit.DexKitManager;
 
 /**
  * Hook 5: 连接车机热点后自动断开蓝牙音频 (A2DP / HFP / 通话)
@@ -19,8 +20,8 @@ public class BluetoothHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String className = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBluetoothClass();
-            String methodName = hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.getBluetoothMethod();
+            String className = DexKitManager.INSTANCE.getBluetoothClass();
+            String methodName = DexKitManager.INSTANCE.getBluetoothMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("BluetoothHook 动态目标未找到，跳过 Hook");
                 return;
@@ -37,7 +38,7 @@ public class BluetoothHook implements IHook {
                         return;
                     }
 
-                    XLog.i("====== 拦截到连接 CarAP 热点请求，执行断开蓝牙音频控制 ======");
+                    XLog.i(">> [自动断开蓝牙] 拦截到连接 CarAP 热点请求，执行断开蓝牙音频控制");
                     Object clInfo = param.args[1];
                     Object ecInfo = param.args[2];
                     String carMac = null;
@@ -72,9 +73,9 @@ public class BluetoothHook implements IHook {
                     }
                 }
             });
-            XLog.i(">> 自动断开蓝牙 Hook 注入成功！");
+            XLog.i(">> [自动断开蓝牙] 自动断开蓝牙 Hook 注入成功！");
         } catch (Throwable t) {
-            XLog.e("❌ Hook 5 (无线连接后断开蓝牙音频) 失败: ", t);
+            XLog.e("❌ [自动断开蓝牙] 无线连接后断开蓝牙音频)失败: ", t);
         }
     }
 }

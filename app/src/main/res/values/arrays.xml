@@ -2,6 +2,7 @@
 <resources>
     <string-array name="lsposed_scopes">
         <item>com.miui.carlink</item>
+        <item>android</item>
         <!-- 以后想加其它的也可以继续增加 item -->
     </string-array>
 </resources>

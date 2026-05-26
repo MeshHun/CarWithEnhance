@@ -1,6 +1,8 @@
 package hun.mesh.carwithenhance;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import hun.mesh.carwithenhance.hook.AutoPlayHook;
 import hun.mesh.carwithenhance.hook.BluetoothHook;
@@ -9,7 +11,9 @@ import hun.mesh.carwithenhance.hook.IHook;
 import hun.mesh.carwithenhance.hook.QPHook;
 import hun.mesh.carwithenhance.hook.SettingsHook;
 import hun.mesh.carwithenhance.hook.ScreenOnHook;
+import hun.mesh.carwithenhance.hook.SystemServerHook;
 import hun.mesh.carwithenhance.utils.XLog;
+import hun.mesh.carwithenhance.dexkit.DexKitManager;
 
 /**
  * CarWithEnhance 模块入口路由器
@@ -19,6 +23,13 @@ public class MainHook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
+        // 1. 系统级拦截（system_server 防杀进程保活）
+        if ("android".equals(lpparam.packageName)) {
+            SystemServerHook.hook(lpparam);
+            return;
+        }
+
+        // 2. CarWith 应用级拦截
         if (!lpparam.packageName.equals(TARGET_PACKAGE)) {
             return;
         }
@@ -26,7 +37,7 @@ public class MainHook implements IXposedHookLoadPackage {
         final ClassLoader cl = lpparam.classLoader;
 
         // 延迟到 Application.onCreate 获取 Context 后再进行 DexKit 初始化和 Hook
-        de.robv.android.xposed.XposedHelpers.findAndHookMethod("android.app.Application", cl, "onCreate", new de.robv.android.xposed.XC_MethodHook() {
+        XposedHelpers.findAndHookMethod("android.app.Application", cl, "onCreate", new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 android.app.Application app = (android.app.Application) param.thisObject;
@@ -37,7 +48,7 @@ public class MainHook implements IXposedHookLoadPackage {
                     XLog.i(">> [CarWith Enhance] 成功获取 Application Context，初始化 DexKit...");
                     
                     // 初始化并解析动态方法名称 (DexKit)
-                    hun.mesh.carwithenhance.dexkit.DexKitManager.INSTANCE.initAndResolve(lpparam, app);
+                    DexKitManager.INSTANCE.initAndResolve(lpparam, app);
 
                     // 构建 Hook 加载队列
                     IHook[] hookQueue = new IHook[]{
