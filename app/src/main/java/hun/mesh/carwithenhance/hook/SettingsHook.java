@@ -89,8 +89,9 @@ public class SettingsHook implements IHook {
                             String key = (String) param.args[1];
                             HookItem matchedItem = HookConfigs.findByKey(key);
                             if (matchedItem != null) {
-                                SharedPreferences sp = (SharedPreferences) param.args[2];
-                                boolean val = sp.getBoolean(key, matchedItem.defaultValue);
+                                Context ctx = (Context) param.args[0];
+                                SharedPreferences mySp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
+                                boolean val = mySp.getBoolean(key, matchedItem.defaultValue);
                                 param.setResult(val);
                                 XLog.i(">> [车机端UI] 拦截读取状态：" + key + " = " + val);
                             }
@@ -111,49 +112,49 @@ public class SettingsHook implements IHook {
             } else {
                 Class<?> adapterClass = XposedHelpers.findClass(adapterClassName, cl);
                 XposedBridge.hookAllMethods(adapterClass, adapterMethodName, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (param.args == null || param.args.length < 2) return;
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        if (param.args == null || param.args.length < 2) return;
 
-                    Object viewHolder = param.args[0];
-                    Object category  = param.args[1];
+                        Object viewHolder = param.args[0];
+                        Object category  = param.args[1];
 
-                    final String key = (String) XposedHelpers.callMethod(category, "getKey");
-                    if (HookConfigs.findByKey(key) == null) return; // 仅接管我们定义的 Key
+                        final String key = (String) XposedHelpers.callMethod(category, "getKey");
+                        if (HookConfigs.findByKey(key) == null) return; // 仅接管我们定义的 Key
 
-                    final android.view.View itemView = (android.view.View) XposedHelpers.getObjectField(viewHolder, "itemView");
-                    if (itemView == null) return;
+                        final android.view.View itemView = (android.view.View) XposedHelpers.getObjectField(viewHolder, "itemView");
+                        if (itemView == null) return;
 
-                    android.widget.CompoundButton switchView = null;
-                    for (Field f : viewHolder.getClass().getDeclaredFields()) {
-                        f.setAccessible(true);
-                        Object val = f.get(viewHolder);
-                        if (val instanceof android.widget.CompoundButton) {
-                            switchView = (android.widget.CompoundButton) val;
-                            break;
+                        android.widget.CompoundButton switchView = null;
+                        for (Field f : viewHolder.getClass().getDeclaredFields()) {
+                            f.setAccessible(true);
+                            Object val = f.get(viewHolder);
+                            if (val instanceof android.widget.CompoundButton) {
+                                switchView = (android.widget.CompoundButton) val;
+                                break;
+                            }
                         }
+
+                        final android.widget.CompoundButton finalSwitch = switchView;
+                        itemView.setOnClickListener(new android.view.View.OnClickListener() {
+                            @Override
+                            public void onClick(android.view.View v) {
+                                if (finalSwitch == null) return;
+
+                                boolean newVal = !finalSwitch.isChecked();
+                                finalSwitch.setChecked(newVal);
+
+                                Context ctx = v.getContext();
+                                SharedPreferences sp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
+                                sp.edit().putBoolean(key, newVal).apply();
+
+                                XLog.i(">> [车机端UI] 开关 " + key + " 点击翻转，写入 SP: " + newVal);
+                            }
+                        });
+
+                        XLog.i(">> [车机端UI] 绑定完成，已成功接管 itemView 点击: key=" + key);
                     }
-
-                    final android.widget.CompoundButton finalSwitch = switchView;
-                    itemView.setOnClickListener(new android.view.View.OnClickListener() {
-                        @Override
-                        public void onClick(android.view.View v) {
-                            if (finalSwitch == null) return;
-
-                            boolean newVal = !finalSwitch.isChecked();
-                            finalSwitch.setChecked(newVal);
-
-                            Context ctx = v.getContext();
-                            SharedPreferences sp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
-                            sp.edit().putBoolean(key, newVal).apply();
-
-                            XLog.i(">> [车机端UI] 开关 " + key + " 点击翻转，写入 SP: " + newVal);
-                        }
-                    });
-
-                    XLog.i(">> [车机端UI] 绑定完成，已成功接管 itemView 点击: key=" + key);
-                }
-            });
+                });
             }
         } catch (Throwable t) {
             XLog.e("❌ Hook 3-3 (车机端UI点击接管) 失败: ", t);

@@ -127,6 +127,7 @@ object DexKitManager {
 
         // 5. SettingsIndexAdapter 目标
         val settingsAdapterResults = bridge.findClass {
+            searchPackages("com.carwith.launcher.settings")
             matcher {
                 usingStrings("prefer_dock_style")
             }
