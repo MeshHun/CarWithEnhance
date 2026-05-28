@@ -67,7 +67,6 @@ public class SystemServerHook {
                                 String[] pkgs = app.getPackageManager().getPackagesForUid(uid);
                                 if (pkgs != null) {
                                     for (String pkg : pkgs) {
-                                        // 只要系统准备杀的是 Carlife 或 CarWith 本体
                                         if ("com.baidu.carlife.xiaomi".equals(pkg)) {
 
                                             XLog.i(">> [进程保护] 拦截到carlife组件判定");

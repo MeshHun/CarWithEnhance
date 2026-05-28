@@ -7,7 +7,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import hun.mesh.carwithenhance.hook.AutoPlayHook;
 import hun.mesh.carwithenhance.hook.BluetoothHook;
 import hun.mesh.carwithenhance.hook.BlurCapabilityHook;
+import hun.mesh.carwithenhance.hook.CarLinkStateHook;
 import hun.mesh.carwithenhance.hook.IHook;
+import hun.mesh.carwithenhance.hook.QQMusicRouteHook;
 import hun.mesh.carwithenhance.hook.QPHook;
 import hun.mesh.carwithenhance.hook.SettingsHook;
 import hun.mesh.carwithenhance.hook.ScreenOnHook;
@@ -19,19 +21,28 @@ import hun.mesh.carwithenhance.dexkit.DexKitManager;
  * CarWithEnhance 模块入口路由器
  */
 public class MainHook implements IXposedHookLoadPackage {
-    private static final String TARGET_PACKAGE = "com.miui.carlink";
 
     @Override
     public void handleLoadPackage(final XC_LoadPackage.LoadPackageParam lpparam) {
-        // 1. 系统级拦截（system_server 防杀进程保活）
-        if ("android".equals(lpparam.packageName)) {
-            SystemServerHook.hook(lpparam);
-            return;
-        }
-
-        // 2. CarWith 应用级拦截
-        if (!lpparam.packageName.equals(TARGET_PACKAGE)) {
-            return;
+        switch (lpparam.packageName) {
+            case "android":
+                // 1. 系统级拦截（system_server 防杀进程保活）
+                SystemServerHook.hook(lpparam);
+                return;
+            case "com.tencent.qqmusic":
+                // 2. QQ音乐 跨应用联动拦截
+                XLog.i(">> [CarWith Enhance] 成功拦截 QQ音乐，挂载车载音效伪装模块...");
+                try {
+                    new QQMusicRouteHook().onHook(lpparam.classLoader);
+                } catch (Throwable t) {
+                    XLog.e(">> [CarWith Enhance] QQ音乐 Hook 挂载失败", t);
+                }
+                return;
+            case "com.miui.carlink":
+                // 3. CarWith 应用级拦截
+                break;
+            default:
+                return;
         }
         XLog.i(">> [CarWith Enhance] 成功拦截小米 CarWith, 开始挂载各优化模块...");
         final ClassLoader cl = lpparam.classLoader;
@@ -41,14 +52,17 @@ public class MainHook implements IXposedHookLoadPackage {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 android.app.Application app = (android.app.Application) param.thisObject;
-                if (!app.getPackageName().equals(TARGET_PACKAGE)) return;
+                if (!app.getPackageName().equals("com.miui.carlink")) return;
                 
                 // 防止多进程重复初始化
-                if (app.getApplicationInfo().processName.equals(TARGET_PACKAGE)) {
+                if (app.getApplicationInfo().processName.equals("com.miui.carlink")) {
                     XLog.i(">> [CarWith Enhance] 成功获取 Application Context，初始化 DexKit...");
                     
                     // 初始化并解析动态方法名称 (DexKit)
                     DexKitManager.INSTANCE.initAndResolve(lpparam, app);
+
+                    CarLinkStateHook carLinkHook = new CarLinkStateHook();
+                    carLinkHook.initContextAndRegister(app);
 
                     // 构建 Hook 加载队列
                     IHook[] hookQueue = new IHook[]{
@@ -57,7 +71,8 @@ public class MainHook implements IXposedHookLoadPackage {
                             new SettingsHook(),
                             new BluetoothHook(),
                             new BlurCapabilityHook(),
-                            new ScreenOnHook()
+                            new ScreenOnHook(),
+                            carLinkHook
                     };
 
                     // 统一循环调度与捕获
