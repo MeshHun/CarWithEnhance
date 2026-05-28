@@ -41,19 +41,6 @@ public class ScreenOnHook implements IHook {
                 }
             });
             XLog.i(">> [唤醒阻止] 禁用20分钟自动亮屏 Hook 注入成功！");
-
-            // 附带操作：由于禁用了亮屏，容易被系统杀后台，所以顺手将其写入 MIUI 系统近期任务加锁白名单 (支持所有 Android 版本)
-            try {
-                Context appCtx = AppUtils.getAppContext(cl);
-                if (appCtx != null && appCtx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE)
-                        .getBoolean(HookConfigs.CARLIFE_KEEPALIVE.key, HookConfigs.CARLIFE_KEEPALIVE.defaultValue)) {
-                    AppUtils.lockAppInRecentTasks(appCtx, "com.baidu.carlife.xiaomi");
-                    AppUtils.lockAppInRecentTasks(appCtx, "com.miui.carlink");
-                }
-            } catch (Throwable t) {
-                XLog.e("❌ [唤醒阻止] 自动写入加锁白名单失败: ", t);
-            }
-            
         } catch (Throwable t) {
             XLog.e("❌ [唤醒阻止] 禁用20分钟自动亮屏 Hook 失败: ", t);
         }
