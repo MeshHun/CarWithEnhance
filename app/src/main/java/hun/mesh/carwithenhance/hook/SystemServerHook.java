@@ -43,7 +43,7 @@ public class SystemServerHook {
                 }
 
                 if (!isScreenOnDisabled) {
-                    XLog.i(">> [进程保护] 禁用自动亮屏未开启，自动跳过免杀 Hook");
+                    XLog.i(">> [进程保护] 禁用自动亮屏未开启，跳过Hook");
                     return;
                 }
 

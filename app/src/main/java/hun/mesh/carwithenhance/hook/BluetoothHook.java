@@ -10,7 +10,7 @@ import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.BluetoothUtils;
 import hun.mesh.carwithenhance.utils.XLog;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 
 /**
  * Hook 5: 连接车机热点后自动断开蓝牙音频 (A2DP / HFP / 通话)
@@ -20,8 +20,8 @@ public class BluetoothHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String className = DexKitManager.INSTANCE.getBluetoothClass();
-            String methodName = DexKitManager.INSTANCE.getBluetoothMethod();
+            String className = CarWithDexKitManager.INSTANCE.getBluetoothClass();
+            String methodName = CarWithDexKitManager.INSTANCE.getBluetoothMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("BluetoothHook 动态目标未找到，跳过 Hook");
                 return;

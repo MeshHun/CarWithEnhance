@@ -11,7 +11,7 @@ import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.config.HookItem;
 import hun.mesh.carwithenhance.utils.XLog;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 
 /**
  * Hook 3 & Hook 4: 车机端与手机端设置面板注入、状态同步和点击接管
@@ -74,8 +74,8 @@ public class SettingsHook implements IHook {
         // 2. 车机端状态读取：拦截以准确返回自定义配置
         // =========================================================================
         try {
-            String className = DexKitManager.INSTANCE.getSettingsClass();
-            String methodName = DexKitManager.INSTANCE.getSettingsMethod();
+            String className = CarWithDexKitManager.INSTANCE.getSettingsClass();
+            String methodName = CarWithDexKitManager.INSTANCE.getSettingsMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("SettingsHook 动态目标未找到，跳过 Hook");
                 return;
@@ -105,56 +105,70 @@ public class SettingsHook implements IHook {
         // 3. 车机端点击交互：Hook SettingsIndexAdapter接管开关点击
         // =========================================================================
         try {
-            String adapterClassName = DexKitManager.INSTANCE.getSettingsAdapterClass();
-            String adapterMethodName = DexKitManager.INSTANCE.getSettingsAdapterMethod();
-            if (adapterClassName == null || adapterClassName.isEmpty() || adapterMethodName == null || adapterMethodName.isEmpty()) {
+            String adapterClassName = CarWithDexKitManager.INSTANCE.getSettingsAdapterClass();
+            String adapterMethodsStr = CarWithDexKitManager.INSTANCE.getSettingsAdapterMethods();
+            if (adapterClassName == null || adapterClassName.isEmpty() || adapterMethodsStr == null || adapterMethodsStr.isEmpty()) {
                 XLog.e("SettingsHook 动态目标 adapter 未找到，跳过 Hook 3-3");
             } else {
                 Class<?> adapterClass = XposedHelpers.findClass(adapterClassName, cl);
-                XposedBridge.hookAllMethods(adapterClass, adapterMethodName, new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (param.args == null || param.args.length < 2) return;
-
-                        Object viewHolder = param.args[0];
-                        Object category  = param.args[1];
-
-                        final String key = (String) XposedHelpers.callMethod(category, "getKey");
-                        if (HookConfigs.findByKey(key) == null) return; // 仅接管我们定义的 Key
-
-                        final android.view.View itemView = (android.view.View) XposedHelpers.getObjectField(viewHolder, "itemView");
-                        if (itemView == null) return;
-
-                        android.widget.CompoundButton switchView = null;
-                        for (Field f : viewHolder.getClass().getDeclaredFields()) {
-                            f.setAccessible(true);
-                            Object val = f.get(viewHolder);
-                            if (val instanceof android.widget.CompoundButton) {
-                                switchView = (android.widget.CompoundButton) val;
-                                break;
+                String[] targetMethods = adapterMethodsStr.split(",");
+                
+                // 遍历 DexKit 精准定位出的绑定方法名（例如 s0, x0）并逐个进行 Hook
+                for (String methodName : targetMethods) {
+                    if (methodName.trim().isEmpty()) continue;
+                    
+                    XposedBridge.hookAllMethods(adapterClass, methodName.trim(), new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                            if (param.args == null || param.args.length < 2) return;
+    
+                            Object viewHolder = param.args[0];
+                            Object category  = param.args[1];
+                            if (viewHolder == null || category == null) return;
+    
+                            String key = null;
+                            try {
+                                key = (String) XposedHelpers.callMethod(category, "getKey");
+                            } catch (Throwable ignore) {
+                                return;
                             }
+                            if (key == null || HookConfigs.findByKey(key) == null) return; // 仅接管我们定义的 Key
+    
+                            final android.view.View itemView = (android.view.View) XposedHelpers.getObjectField(viewHolder, "itemView");
+                            if (itemView == null) return;
+    
+                            android.widget.CompoundButton switchView = null;
+                            for (Field f : viewHolder.getClass().getDeclaredFields()) {
+                                f.setAccessible(true);
+                                Object val = f.get(viewHolder);
+                                if (val instanceof android.widget.CompoundButton) {
+                                    switchView = (android.widget.CompoundButton) val;
+                                    break;
+                                }
+                            }
+    
+                            final android.widget.CompoundButton finalSwitch = switchView;
+                            final String finalKey = key;
+                            itemView.setOnClickListener(new android.view.View.OnClickListener() {
+                                @Override
+                                public void onClick(android.view.View v) {
+                                    if (finalSwitch == null) return;
+    
+                                    boolean newVal = !finalSwitch.isChecked();
+                                    finalSwitch.setChecked(newVal);
+    
+                                    Context ctx = v.getContext();
+                                    SharedPreferences sp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
+                                    sp.edit().putBoolean(finalKey, newVal).apply();
+    
+                                    XLog.i(">> [车机端UI] 开关 " + finalKey + " 点击翻转，写入 SP: " + newVal);
+                                }
+                            });
+    
+                            XLog.i(">> [车机端UI] 绑定完成，已成功接管 itemView 点击: key=" + key);
                         }
-
-                        final android.widget.CompoundButton finalSwitch = switchView;
-                        itemView.setOnClickListener(new android.view.View.OnClickListener() {
-                            @Override
-                            public void onClick(android.view.View v) {
-                                if (finalSwitch == null) return;
-
-                                boolean newVal = !finalSwitch.isChecked();
-                                finalSwitch.setChecked(newVal);
-
-                                Context ctx = v.getContext();
-                                SharedPreferences sp = ctx.getSharedPreferences(HookConfigs.PREFS_FILE, Context.MODE_PRIVATE);
-                                sp.edit().putBoolean(key, newVal).apply();
-
-                                XLog.i(">> [车机端UI] 开关 " + key + " 点击翻转，写入 SP: " + newVal);
-                            }
-                        });
-
-                        XLog.i(">> [车机端UI] 绑定完成，已成功接管 itemView 点击: key=" + key);
-                    }
-                });
+                    });
+                }
             }
         } catch (Throwable t) {
             XLog.e("❌ Hook 3-3 (车机端UI点击接管) 失败: ", t);
@@ -164,7 +178,7 @@ public class SettingsHook implements IHook {
         // 4. 手机端设置界面注入：动态创建 SwitchPreference 形成双端互控
         // =========================================================================
         try {
-            String fragmentClassName = DexKitManager.INSTANCE.getUcarSettingsFragmentClass();
+            String fragmentClassName = CarWithDexKitManager.INSTANCE.getUcarSettingsFragmentClass();
             if (fragmentClassName == null || fragmentClassName.isEmpty()) {
                 XLog.e("SettingsHook 动态目标 UCarScreenSettingsFragment 未找到，跳过 Hook 4");
             } else {

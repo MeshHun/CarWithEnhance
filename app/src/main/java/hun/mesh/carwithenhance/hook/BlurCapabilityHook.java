@@ -7,7 +7,7 @@ import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.XLog;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 
 public class BlurCapabilityHook implements IHook {
 
@@ -30,8 +30,8 @@ public class BlurCapabilityHook implements IHook {
 
         try {
             // 获取目标类 em.d (HyperMaterialUtils)
-            String className = DexKitManager.INSTANCE.getBlurClass();
-            String methodName = DexKitManager.INSTANCE.getBlurMethod();
+            String className = CarWithDexKitManager.INSTANCE.getBlurClass();
+            String methodName = CarWithDexKitManager.INSTANCE.getBlurMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("BlurCapabilityHook 动态目标未找到，跳过 Hook");
                 return;

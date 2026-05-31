@@ -6,7 +6,7 @@ import de.robv.android.xposed.XC_MethodReplacement;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.XLog;
 
@@ -18,8 +18,8 @@ public class AutoPlayHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String className = DexKitManager.INSTANCE.getAutoPlayClass();
-            String methodName = DexKitManager.INSTANCE.getAutoPlayMethod();
+            String className = CarWithDexKitManager.INSTANCE.getAutoPlayClass();
+            String methodName = CarWithDexKitManager.INSTANCE.getAutoPlayMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("AutoPlayHook 动态目标未找到，跳过 Hook");
                 return;

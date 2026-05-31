@@ -1,208 +1,231 @@
 package hun.mesh.carwithenhance.hook;
 
 import android.app.Application;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.os.Build;
 import android.os.Bundle;
 
 import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
+import hun.mesh.carwithenhance.dexkit.QQMusicDexKitManager;
 import hun.mesh.carwithenhance.utils.XLog;
 
 /**
- * QQ 音乐设备路由与音效伪装模块
+ * QQ音乐音频路由伪装：利用 DexKit 缓存所有类/方法名，通过 Settings.Global 感知车机互联状态。
+ * Hook 顺序：initAndResolve → hookAudioRouteManager → 注册 ContentObserver → 读取初始状态
  */
 public class QQMusicRouteHook implements IHook {
 
-    public static final String ACTION_CARWITH_CONNECTED = "hun.mesh.carwithenhance.ACTION_CARWITH_CONNECTED";
-    public static final String ACTION_CARWITH_DISCONNECTED = "hun.mesh.carwithenhance.ACTION_CARWITH_DISCONNECTED";
+    private static final String TAG = "[QQMusicRouteHook]";
 
     private static volatile boolean isCarWithConnected = false;
-
-    private static final String AUDIO_ROUTE_MANAGER_CLASS = "com.tencent.qqmusic.business.bluetooth.AudioRouteManager";
-    private static final String AUDIO_GEAR_INFO_CLASS = "com.tencent.qqmusic.business.bluetooth.AudioGearInfo";
-
-    private static Context sAppContext;
     private static Object sVirtualCarGearInfo = null;
-    private static Object sSpeakerGearInfo = null;
+    private static Object sSpeakerGearInfo    = null;
+    private static Context sAppContext;
+    private static Class<?> sManagerCls;
+    private static String sMethodUpdateRoute;
 
     @Override
     public void onHook(ClassLoader cl) throws Throwable {
-
-        // 1. Hook Application 以注册状态监听广播
         XposedHelpers.findAndHookMethod(Application.class, "onCreate", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Application app = (Application) param.thisObject;
-                if (!"com.tencent.qqmusic".equals(app.getPackageName())) return;
-                
-                // 仅主进程注册
-                if (!app.getApplicationInfo().processName.equals("com.tencent.qqmusic")) return;
-
                 sAppContext = app;
-                XLog.i("[QQMusicRouteHook] 正在 QQ 音乐中注册 CarWith 状态监听器...");
-                
-                IntentFilter filter = new IntentFilter();
-                filter.addAction(ACTION_CARWITH_CONNECTED);
-                filter.addAction(ACTION_CARWITH_DISCONNECTED);
-                
-                app.registerReceiver(new BroadcastReceiver() {
-                    @Override
-                    public void onReceive(Context context, Intent intent) {
-                        String action = intent.getAction();
-                        if (ACTION_CARWITH_CONNECTED.equals(action)) {
-                            XLog.i("[QQMusicRouteHook] 收到 CarWith 互联成功广播，准备强制刷新 QQ 音乐设备路由...");
-                            isCarWithConnected = true;
-                            forceRefreshAudioRoute(cl);
-                        } else if (ACTION_CARWITH_DISCONNECTED.equals(action)) {
-                            XLog.i("[QQMusicRouteHook] 收到 CarWith 断开互联广播，释放 QQ 音乐设备控制权...");
-                            isCarWithConnected = false;
-                            forceRefreshAudioRoute(cl); // 断开后同样需要刷新以恢复原状
-                        }
-                    }
-                }, filter, 0x2); // Context.RECEIVER_EXPORTED (0x2) Android 13+
 
-                // 主动发起一次状态查询 (Ping-Pong)
-                XLog.i("[QQMusicRouteHook] 启动完成，向 CarWith 发送状态查询请求...");
-                Intent queryIntent = new Intent("hun.mesh.carwithenhance.ACTION_QUERY_CARWITH_STATE");
-                queryIntent.addFlags(0x01000000); // FLAG_RECEIVER_INCLUDE_BACKGROUND
-                app.sendBroadcast(queryIntent);
+                XLog.i(TAG + " 启动，初始化 DexKit...");
+                QQMusicDexKitManager.INSTANCE.initAndResolve(app);
+
+                hookAudioRouteManager(cl);
+
+                //监听 Settings.Global 变化
+                app.getContentResolver().registerContentObserver(
+                        android.provider.Settings.Global.getUriFor("carwithenhance_is_connected"),
+                        false,
+                        new android.database.ContentObserver(
+                                new android.os.Handler(android.os.Looper.getMainLooper())) {
+                            @Override
+                            public void onChange(boolean selfChange) {
+                                try {
+                                    int val = android.provider.Settings.Global.getInt(
+                                            app.getContentResolver(), "carwithenhance_is_connected", 0);
+                                    isCarWithConnected = (val == 1);
+                                    XLog.i(TAG + " Settings 变化: " + isCarWithConnected);
+                                    forceRefreshAudioRoute();
+                                } catch (Exception e) {
+                                    XLog.e(TAG + " 读取 Settings 失败", e);
+                                }
+                            }
+                        }
+                );
+
+                //读取初始状态（模块安装前可能已经连接）
+                try {
+                    int val = android.provider.Settings.Global.getInt(
+                            app.getContentResolver(), "carwithenhance_is_connected", 0);
+                    isCarWithConnected = (val == 1);
+                    if (isCarWithConnected) {
+                        forceRefreshAudioRoute();
+                    }
+                } catch (Exception e) {
+                    XLog.e(TAG + " 初始化读取 Settings 失败", e);
+                }
             }
         });
+    }
 
-        // 2. 核心AudioRouteManager 的 Getter 拦截
-        Class<?> audioRouteManagerCls = XposedHelpers.findClassIfExists(AUDIO_ROUTE_MANAGER_CLASS, cl);
-        if (audioRouteManagerCls != null) {
-            
-            // 拦截 f() -> int GearType
-            XposedHelpers.findAndHookMethod(audioRouteManagerCls, "f", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (isCarWithConnected) {
-                        param.setResult(2); // 2 == carAudio
-                    }
-                }
-            });
+    private void hookAudioRouteManager(ClassLoader cl) {
+        // 通过 DexKit 缓存的类名加载，无需 findClassIfExists 二次验证
+        String managerClassName  = QQMusicDexKitManager.INSTANCE.getClassAudioRouteManager();
+        String gearInfoClassName = QQMusicDexKitManager.INSTANCE.getClassAudioGearInfo();
+        String receiverClassName = QQMusicDexKitManager.INSTANCE.getClassBluetoothReceiver();
 
-            // 拦截 k() -> boolean isCarAudio
-            XposedHelpers.findAndHookMethod(audioRouteManagerCls, "k", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (isCarWithConnected) {
-                        param.setResult(true);
-                    }
-                }
-            });
+        sMethodUpdateRoute = QQMusicDexKitManager.INSTANCE.getMethodUpdateRoute();
+        String mGetGearType = QQMusicDexKitManager.INSTANCE.getMethodGetGearType();
+        String mIsCarAudio  = QQMusicDexKitManager.INSTANCE.getMethodIsCarAudio();
+        String mGetGearInfo = QQMusicDexKitManager.INSTANCE.getMethodGetGearInfo();
 
-            // 拦截 e() -> AudioGearInfo
-            XposedHelpers.findAndHookMethod(audioRouteManagerCls, "e", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (isCarWithConnected) {
-                        param.setResult(getVirtualCarGearInfo(cl));
-                    }
-                }
-            });
-            
-            // 3. 拦截 BroadcastReceiver onReceive 防止真实蓝牙事件串位
-            Class<?> receiverCls = XposedHelpers.findClassIfExists(AUDIO_ROUTE_MANAGER_CLASS + "$b", cl);
-            if (receiverCls != null) {
-                XposedHelpers.findAndHookMethod(receiverCls, "onReceive", Context.class, Intent.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (isCarWithConnected) {
-                            XLog.i("[QQMusicRouteHook] 拦截并屏蔽底层真实系统蓝牙广播，保护车载模式...");
-                            param.setResult(null); // 直接阻断
-                        }
-                    }
-                });
-            } else {
-                XLog.e("[QQMusicRouteHook] 警告：未找到 AudioRouteManager$b (广播接收器)，物理防串位机制可能失效");
+        try {
+            sManagerCls = cl.loadClass(managerClassName);
+        } catch (ClassNotFoundException e) {
+            XLog.e(TAG + " 无法加载 AudioRouteManager 类: " + managerClassName, e);
+            return;
+        }
+
+        Class<?> gearInfoCls = null;
+        try {
+            gearInfoCls = cl.loadClass(gearInfoClassName);
+            buildGearInfos(gearInfoCls);
+        } catch (ClassNotFoundException e) {
+            XLog.e(TAG + " 无法加载 AudioGearInfo 类: " + gearInfoClassName, e);
+        }
+
+        // Hook 1: 路由总调度 o(int, AudioGearInfo, Bundle, boolean)
+        if (!sMethodUpdateRoute.isEmpty() && gearInfoCls != null) {
+            try {
+                final Class<?> finalGearInfoCls = gearInfoCls;
+                XposedHelpers.findAndHookMethod(sManagerCls, sMethodUpdateRoute,
+                        int.class, finalGearInfoCls, Bundle.class, boolean.class,
+                        new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (isCarWithConnected && sVirtualCarGearInfo != null) {
+                                    param.args[0] = 2; // routeType = carAudio
+                                    param.args[1] = sVirtualCarGearInfo;
+                                    XLog.i(TAG + " --> 拦截 " + sMethodUpdateRoute + "()，注入虚拟车载参数");
+                                }
+                            }
+                        });
+            } catch (Throwable t) {
+                XLog.e(TAG + " Hook 路由分发口失败", t);
             }
-            
-        } else {
-            XLog.e("[QQMusicRouteHook] 找不到核心类 AudioRouteManager，QQ音乐 Hook 彻底失败");
+        }
+
+        // Hook 2: Getters 欺骗
+        if (!mGetGearType.isEmpty()) {
+            XposedHelpers.findAndHookMethod(sManagerCls, mGetGearType, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (isCarWithConnected) param.setResult(2);
+                }
+            });
+        }
+        if (!mIsCarAudio.isEmpty()) {
+            XposedHelpers.findAndHookMethod(sManagerCls, mIsCarAudio, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (isCarWithConnected) param.setResult(true);
+                }
+            });
+        }
+        if (!mGetGearInfo.isEmpty()) {
+            XposedHelpers.findAndHookMethod(sManagerCls, mGetGearInfo, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    if (isCarWithConnected && sVirtualCarGearInfo != null) {
+                        param.setResult(sVirtualCarGearInfo);
+                    }
+                }
+            });
+        }
+
+        // Hook 3: 屏蔽真实蓝牙广播（防止在车载模式中被真实设备事件打断）
+        if (!receiverClassName.isEmpty()) {
+            try {
+                Class<?> receiverCls = cl.loadClass(receiverClassName);
+                XposedHelpers.findAndHookMethod(receiverCls, "onReceive",
+                        Context.class, Intent.class, new XC_MethodHook() {
+                            @Override
+                            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                                if (isCarWithConnected) {
+                                    XLog.i(TAG + " --> 屏蔽真实蓝牙广播，保护车载模式");
+                                    param.setResult(null);
+                                }
+                            }
+                        });
+            } catch (ClassNotFoundException e) {
+                XLog.e(TAG + " 无法加载蓝牙广播接收器: " + receiverClassName, e);
+            }
         }
     }
 
-    /**
-     * 强行调用 o(...) 派发方法，主动驱动 QQ 音乐内部刷新
-     */
-    private void forceRefreshAudioRoute(ClassLoader cl) {
+    private void buildGearInfos(Class<?> gearInfoCls) {
+        if (sVirtualCarGearInfo != null) return;
         try {
-            Class<?> managerCls = XposedHelpers.findClass(AUDIO_ROUTE_MANAGER_CLASS, cl);
-            Object instance = XposedHelpers.callStaticMethod(managerCls, "g"); // 获取单例 AudioRouteManager.g()
-            if (instance != null) {
-                // 防止 QQ音乐 AudioRouteManager 尚未完全初始化导致其内部 Context 为 null 而崩溃
-                if (sAppContext != null) {
-                    for (java.lang.reflect.Field field : managerCls.getDeclaredFields()) {
-                        if (Context.class.isAssignableFrom(field.getType())) {
-                            field.setAccessible(true);
-                            if (field.get(instance) == null) {
-                                field.set(instance, sAppContext);
-                                XLog.i("[QQMusicRouteHook] 成功为 AudioRouteManager 强行注入缺失的 Context");
-                            }
-                            break;
-                        }
+            hun.mesh.carwithenhance.dexkit.QQMusicDexKitManager kit = hun.mesh.carwithenhance.dexkit.QQMusicDexKitManager.INSTANCE;
+
+            Object carGear = XposedHelpers.newInstance(gearInfoCls);
+            XposedHelpers.setIntField(carGear, kit.getFieldGearType(), 2); // gearType = carAudio
+            XposedHelpers.setObjectField(carGear, kit.getFieldBrand(), android.os.Build.BRAND);
+            XposedHelpers.setObjectField(carGear, kit.getFieldModel(), "CarWith互联");
+            XposedHelpers.setObjectField(carGear, kit.getFieldMac(), "CW:00:11:22:33:44:55");
+            XposedHelpers.setIntField(carGear, kit.getFieldIntG(), 2);
+            XposedHelpers.setIntField(carGear, kit.getFieldIntH(), 2);
+            sVirtualCarGearInfo = carGear;
+
+            Object speakerGear = XposedHelpers.newInstance(gearInfoCls);
+            XposedHelpers.setIntField(speakerGear, kit.getFieldGearType(), 3); // internalSpeaker
+            XposedHelpers.setObjectField(speakerGear, kit.getFieldBrand(), android.os.Build.BRAND);
+            XposedHelpers.setObjectField(speakerGear, kit.getFieldModel(), android.os.Build.MODEL);
+            XposedHelpers.setIntField(speakerGear, kit.getFieldIntG(), 4);
+            XposedHelpers.setIntField(speakerGear, kit.getFieldIntH(), 3);
+            sSpeakerGearInfo = speakerGear;
+
+            XLog.i(TAG + " GearInfo 缓存构建完成");
+        } catch (Throwable t) {
+            XLog.e(TAG + " 构造 GearInfo 失败", t);
+        }
+    }
+
+    private void forceRefreshAudioRoute() {
+        if (sManagerCls == null || sMethodUpdateRoute == null || sMethodUpdateRoute.isEmpty()) return;
+        try {
+            String mGetInstance = QQMusicDexKitManager.INSTANCE.getMethodGetInstance();
+            if (mGetInstance.isEmpty()) return;
+
+            Object instance = XposedHelpers.callStaticMethod(sManagerCls, mGetInstance);
+            if (instance == null) return;
+
+            // 注入 Context 防内部 NPE
+            if (sAppContext != null) {
+                for (java.lang.reflect.Field field : sManagerCls.getDeclaredFields()) {
+                    if (Context.class.isAssignableFrom(field.getType())) {
+                        field.setAccessible(true);
+                        if (field.get(instance) == null) field.set(instance, sAppContext);
+                        break;
                     }
                 }
+            }
 
-                if (isCarWithConnected) {
-                    Object virtualGear = getVirtualCarGearInfo(cl);
-                    XLog.i("[QQMusicRouteHook] 反射调用 o()，注入虚拟车机...");
-                    XposedHelpers.callMethod(instance, "o", 2, virtualGear, new Bundle(), true);
-                } else {
-                    Object speakerGear = getSpeakerGearInfo(cl);
-                    XLog.i("[QQMusicRouteHook] 反射调用 o()，恢复手机内置扬声器状态...");
-                    XposedHelpers.callMethod(instance, "o", 4, speakerGear, new Bundle(), true);
-                }
+            if (isCarWithConnected && sVirtualCarGearInfo != null) {
+                XLog.i(TAG + " 主动驱动刷新 -> 虚拟车载");
+                XposedHelpers.callMethod(instance, sMethodUpdateRoute, 2, sVirtualCarGearInfo, new Bundle(), true);
+            } else if (!isCarWithConnected && sSpeakerGearInfo != null) {
+                XLog.i(TAG + " 主动驱动刷新 -> 恢复外放");
+                XposedHelpers.callMethod(instance, sMethodUpdateRoute, 4, sSpeakerGearInfo, new Bundle(), true);
             }
         } catch (Throwable t) {
-            XLog.e("[QQMusicRouteHook] forceRefreshAudioRoute 调用异常: ", t);
+            XLog.e(TAG + " forceRefreshAudioRoute 异常", t);
         }
-    }
-
-    /**
-     * 获取固定的虚拟车载设备信息 (带缓存以解决卡顿)
-     */
-    private Object getVirtualCarGearInfo(ClassLoader cl) {
-        if (sVirtualCarGearInfo == null) {
-            try {
-                Class<?> gearInfoCls = XposedHelpers.findClass(AUDIO_GEAR_INFO_CLASS, cl);
-                Object gearInfo = XposedHelpers.newInstance(gearInfoCls);
-                XposedHelpers.setIntField(gearInfo, "b", 2); // gearType = carAudio
-                XposedHelpers.setObjectField(gearInfo, "d", Build.BRAND); // brand 使用真实手机品牌以提升 UI 兼容
-                XposedHelpers.setObjectField(gearInfo, "e", "CarWith互联"); // model，会在部分 UI 显示
-                XposedHelpers.setObjectField(gearInfo, "f", "CW:00:11:22:33:44:55"); // uniqueId
-                XposedHelpers.setIntField(gearInfo, "g", 2); // audioRoute = a2dp
-                XposedHelpers.setIntField(gearInfo, "h", 2); // realGearType = carAudio
-                sVirtualCarGearInfo = gearInfo;
-            } catch (Throwable t) {
-                XLog.e("[QQMusicRouteHook] getVirtualCarGearInfo 失败", t);
-            }
-        }
-        return sVirtualCarGearInfo;
-    }
-
-    private Object getSpeakerGearInfo(ClassLoader cl) {
-        if (sSpeakerGearInfo == null) {
-            try {
-                Class<?> gearInfoCls = XposedHelpers.findClass(AUDIO_GEAR_INFO_CLASS, cl);
-                Object gearInfo = XposedHelpers.newInstance(gearInfoCls);
-                XposedHelpers.setIntField(gearInfo, "b", 3); // internalSpeaker
-                XposedHelpers.setObjectField(gearInfo, "d", Build.BRAND);
-                XposedHelpers.setObjectField(gearInfo, "e", Build.MODEL);
-                XposedHelpers.setIntField(gearInfo, "g", 4); // audioRoute = speaker
-                XposedHelpers.setIntField(gearInfo, "h", 3);
-                sSpeakerGearInfo = gearInfo;
-            } catch (Throwable t) {
-                XLog.e("[QQMusicRouteHook] getSpeakerGearInfo 失败", t);
-            }
-        }
-        return sSpeakerGearInfo;
     }
 }

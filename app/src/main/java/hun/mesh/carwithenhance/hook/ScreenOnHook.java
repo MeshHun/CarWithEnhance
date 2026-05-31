@@ -7,7 +7,7 @@ import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.XLog;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 
 /**
  * Hook: 禁用 CarWith 20 分钟自动亮屏
@@ -17,8 +17,8 @@ public class ScreenOnHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String smClassName = DexKitManager.INSTANCE.getCarlinkStateMachineClass();
-            String smMethodName = DexKitManager.INSTANCE.getScreenOnMethod();
+            String smClassName = CarWithDexKitManager.INSTANCE.getCarlinkStateMachineClass();
+            String smMethodName = CarWithDexKitManager.INSTANCE.getScreenOnMethod();
             if (smClassName == null || smClassName.isEmpty() || smMethodName == null || smMethodName.isEmpty()) {
                 XLog.e("ScreenOnHook 动态目标未找到，跳过 Hook");
                 return;

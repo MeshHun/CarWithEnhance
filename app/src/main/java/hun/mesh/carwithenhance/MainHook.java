@@ -15,7 +15,7 @@ import hun.mesh.carwithenhance.hook.SettingsHook;
 import hun.mesh.carwithenhance.hook.ScreenOnHook;
 import hun.mesh.carwithenhance.hook.SystemServerHook;
 import hun.mesh.carwithenhance.utils.XLog;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.*;
 
 /**
  * CarWithEnhance 模块入口路由器
@@ -30,8 +30,12 @@ public class MainHook implements IXposedHookLoadPackage {
                 SystemServerHook.hook(lpparam);
                 return;
             case "com.tencent.qqmusic":
+                if (!lpparam.processName.equals("com.tencent.qqmusic:QQPlayerService")) {
+                    return;
+                }
+                
                 // 2. QQ音乐 跨应用联动拦截
-                XLog.i(">> [CarWith Enhance] 成功拦截 QQ音乐，挂载车载音效伪装模块...");
+                XLog.i(">> [CarWith Enhance] 成功拦截 QQ音乐进程: " + lpparam.processName + "，挂载车载音效切换");
                 try {
                     new QQMusicRouteHook().onHook(lpparam.classLoader);
                 } catch (Throwable t) {
@@ -52,41 +56,35 @@ public class MainHook implements IXposedHookLoadPackage {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 android.app.Application app = (android.app.Application) param.thisObject;
-                if (!app.getPackageName().equals("com.miui.carlink")) return;
-                
-                // 防止多进程重复初始化
-                if (app.getApplicationInfo().processName.equals("com.miui.carlink")) {
-                    XLog.i(">> [CarWith Enhance] 成功获取 Application Context，初始化 DexKit...");
-                    
-                    // 初始化并解析动态方法名称 (DexKit)
-                    DexKitManager.INSTANCE.initAndResolve(lpparam, app);
 
-                    CarLinkStateHook carLinkHook = new CarLinkStateHook();
-                    carLinkHook.initContextAndRegister(app);
+                XLog.i(">> [CarWith Enhance] 成功获取 Application Context，初始化 DexKit...");
 
-                    // 构建 Hook 加载队列
-                    IHook[] hookQueue = new IHook[]{
-                            new AutoPlayHook(),
-                            new QPHook(),
-                            new SettingsHook(),
-                            new BluetoothHook(),
-                            new BlurCapabilityHook(),
-                            new ScreenOnHook(),
-                            carLinkHook
-                    };
+                // 初始化并解析动态方法名称 (DexKit)
+                CarWithDexKitManager.INSTANCE.initAndResolve(lpparam, app);
 
-                    // 统一循环调度与捕获
-                    for (IHook hook : hookQueue) {
-                        String hookName = hook.getClass().getSimpleName();
-                        try {
-                            XLog.i(">> [路由器] 正在挂载: " + hookName);
-                            hook.onHook(cl);
-                        } catch (Throwable t) {
-                            XLog.e(">> [路由器] 挂载 " + hookName + " 异常失败: ", t);
-                        }
+                // 构建 Hook 加载队列
+                IHook[] hookQueue = new IHook[]{
+                        new AutoPlayHook(),
+                        new QPHook(),
+                        new SettingsHook(),
+                        new BluetoothHook(),
+                        new BlurCapabilityHook(),
+                        new ScreenOnHook(),
+                        new CarLinkStateHook(app)
+                };
+
+                // 统一循环调度与捕获
+                for (IHook hook : hookQueue) {
+                    String hookName = hook.getClass().getSimpleName();
+                    try {
+                        XLog.i(">> [CarWith Enhance] 正在挂载: " + hookName);
+                        hook.onHook(cl);
+                    } catch (Throwable t) {
+                        XLog.e(">> [CarWith Enhance] 挂载 " + hookName + " 异常失败: ", t);
                     }
-                    XLog.i(">> [CarWith Enhance] 所有优化子模块全部挂载处理完成！");
                 }
+                XLog.i(">> [CarWith Enhance] 所有优化子模块全部挂载处理完成！");
+
             }
         });
     }

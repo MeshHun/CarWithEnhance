@@ -9,7 +9,7 @@ import java.util.List;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 import hun.mesh.carwithenhance.config.HookConfigs;
-import hun.mesh.carwithenhance.dexkit.DexKitManager;
+import hun.mesh.carwithenhance.dexkit.CarWithDexKitManager;
 import hun.mesh.carwithenhance.utils.AppUtils;
 import hun.mesh.carwithenhance.utils.XLog;
 
@@ -26,8 +26,8 @@ public class QPHook implements IHook {
     @Override
     public void onHook(final ClassLoader cl) throws Throwable {
         try {
-            String className = DexKitManager.INSTANCE.getQpClass();
-            String methodName = DexKitManager.INSTANCE.getQpMethod();
+            String className = CarWithDexKitManager.INSTANCE.getQpClass();
+            String methodName = CarWithDexKitManager.INSTANCE.getQpMethod();
             if (className == null || className.isEmpty()) {
                 XLog.e("QPHook 动态目标未找到，跳过 Hook");
                 return;
@@ -65,18 +65,21 @@ public class QPHook implements IHook {
                             }else if (QCOM_SOC_OLD.contains(socinfo)){
                                 bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 10);
                                 bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 10);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 30);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 30);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 24);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 24);
+                                bundle.putInt("bitrate", 15000000);
                             }else if (QCOM_SOC_NEW.contains(socinfo)){
                                 bundle.putInt("video-qp-i-min", 10);
                                 bundle.putInt("video-qp-p-min", 10);
-                                bundle.putInt("video-qp-i-max", 30);
-                                bundle.putInt("video-qp-p-max", 30);
+                                bundle.putInt("video-qp-i-max", 26);
+                                bundle.putInt("video-qp-p-max", 26);
+                                bundle.putInt("bitrate", 15000000);
                             }else{
                                 bundle.putInt("video-qp-i-min", 16);
                                 bundle.putInt("video-qp-p-min", 16);
                                 bundle.putInt("video-qp-i-max", 32);
                                 bundle.putInt("video-qp-p-max", 32);
+                                bundle.putInt("bitrate", 15000000);
                             }                        
                             // 注入高通扩展 QP 参数
                             // bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 10);
