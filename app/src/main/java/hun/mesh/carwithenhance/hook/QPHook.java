@@ -63,23 +63,23 @@ public class QPHook implements IHook {
                                     bundle.putInt("video-qp-p-max", 32);
                                 }
                             }else if (QCOM_SOC_OLD.contains(socinfo)){
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 10);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 10);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 24);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 24);
-                                bundle.putInt("bitrate", 15000000);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 16);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 16);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 30);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 30);
+                                // bundle.putInt("bitrate", 15000000);
                             }else if (QCOM_SOC_NEW.contains(socinfo)){
-                                bundle.putInt("video-qp-i-min", 10);
-                                bundle.putInt("video-qp-p-min", 10);
-                                bundle.putInt("video-qp-i-max", 26);
-                                bundle.putInt("video-qp-p-max", 26);
-                                bundle.putInt("bitrate", 15000000);
+                                bundle.putInt("video-qp-i-min", 16);
+                                bundle.putInt("video-qp-p-min", 16);
+                                bundle.putInt("video-qp-i-max", 30);
+                                bundle.putInt("video-qp-p-max", 30);
+                                // bundle.putInt("bitrate", 15000000);
                             }else{
                                 bundle.putInt("video-qp-i-min", 16);
                                 bundle.putInt("video-qp-p-min", 16);
                                 bundle.putInt("video-qp-i-max", 32);
                                 bundle.putInt("video-qp-p-max", 32);
-                                bundle.putInt("bitrate", 15000000);
+                                // bundle.putInt("bitrate", 15000000);
                             }                        
                             // 注入高通扩展 QP 参数
                             // bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 10);

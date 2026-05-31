@@ -38,8 +38,8 @@ public class HookConfigs {
     // 4. Android 13 强开高级材质
     public static final HookItem ADVANCED_BLUR = new HookItem(
             "hook_advanced_blur_enabled",
-            "Android13跳过高级材质验证",
-            "在安卓13不支持的设备上允许使用毛玻璃和高级材质",
+            "跳过全局设置中高级材质验证",
+            "CarWith中启用毛玻璃和高级材质，而不受全局高级材质设置影响",
             true
     );
 
@@ -47,7 +47,7 @@ public class HookConfigs {
     public static final HookItem CARLIFE_KEEPALIVE = new HookItem(
             "hook_carlife_keepalive_enabled",
             "Carlife进程保活",
-            "解决因Carlife进程误杀而造成的断连 (Android <=13同时禁用20分钟自动亮屏唤醒)",
+            "(目前对Android>=14以上设备无效)解决因Carlife进程误杀而造成的断连 (Android <=13同时禁用20分钟自动亮屏唤醒)",
             false
     );  
 

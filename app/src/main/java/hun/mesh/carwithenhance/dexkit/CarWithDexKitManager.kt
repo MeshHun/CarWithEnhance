@@ -238,7 +238,7 @@ object CarWithDexKitManager {
         castControllerResults.singleOrNull()?.let {
             castControllerClass = it.className
             castControllerConnectMethod = it.name
-            XLog.i("CarWithDexKit: 找到 CastController 连接目标 -> $castControllerClass.$castControllerConnectMethod")
+            XLog.i("[CarWithDexKit]: 找到 CastController 连接目标 -> $castControllerClass.$castControllerConnectMethod")
             
             // 同一个类下，寻找断开方法 displayDisconnected (无参方法且无返回值)
             val disconnectResults = bridge.findMethod {

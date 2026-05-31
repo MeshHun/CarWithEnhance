@@ -14,9 +14,12 @@ android {
         applicationId = "hun.mesh.carwithenhance"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
         buildConfigField("long", "BUILD_TIME", "${System.currentTimeMillis()}L")
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
     }
 
     buildTypes {
