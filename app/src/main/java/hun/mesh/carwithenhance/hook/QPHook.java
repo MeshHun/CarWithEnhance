@@ -69,7 +69,7 @@ public class QPHook implements IHook {
                                 bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 12);
                                 bundle.putInt("max-bframes", 0);
                                 bundle.putInt("latency", 1);
-                                bundle.putInt("priority", 0)
+                                bundle.putInt("priority", 0);
 
                                 // bundle.putInt("bitrate", 15000000);
                             }else if (QCOM_SOC_NEW.contains(socinfo)){
