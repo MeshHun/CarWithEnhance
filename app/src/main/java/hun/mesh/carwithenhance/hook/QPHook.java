@@ -63,10 +63,14 @@ public class QPHook implements IHook {
                                     bundle.putInt("video-qp-p-max", 32);
                                 }
                             }else if (QCOM_SOC_OLD.contains(socinfo)){
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 16);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 16);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 30);
-                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 30);
+                                // bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-min", 16);
+                                // bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-min", 16);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-i-max", 12);
+                                bundle.putInt("vendor.qti-ext-enc-qp-range.qp-p-max", 12);
+                                bundle.putInt("max-bframes", 0);
+                                bundle.putInt("latency", 1);
+                                bundle.putInt("priority", 0)
+
                                 // bundle.putInt("bitrate", 15000000);
                             }else if (QCOM_SOC_NEW.contains(socinfo)){
                                 bundle.putInt("video-qp-i-min", 16);
